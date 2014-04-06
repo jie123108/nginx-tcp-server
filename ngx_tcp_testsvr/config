@@ -1,0 +1,29 @@
+#必须调用tcp_async模块的config
+source ./src/tcp_async/config
+
+ngx_tcp_src="$ngx_tcp_src $ngx_addon_dir/test_service.cpp $ngx_addon_dir/test_impl.cpp"
+ngx_tcp_src="$ngx_tcp_src $ngx_addon_dir/mylib/ConnPool.c $ngx_addon_dir/mylib/IniFile.cpp"
+ngx_tcp_src="$ngx_tcp_src $ngx_addon_dir/mylib/Sockcli.cpp"
+
+#MYSQLLIB=/usr/local/mysql/lib/libmysqlclient.a
+
+CFLAGS="$CFLAGS `mysql_config --include` "
+CORE_LIBS="$CORE_LIBS  `mysql_config --libs`"
+
+ngx_feature_test="int a;"
+. auto/feature
+
+if [ $ngx_found = yes ]; then
+    CORE_INCS="$CORE_INCS $ngx_feature_path"
+    ngx_addon_name=ngx_tcp_module
+    TCP_CORE_MODULES="ngx_tcp_module ngx_tcp_core_module"
+    EVENT_MODULES="$EVENT_MODULES $TCP_CORE_MODULES"
+    NGX_ADDON_DEPS="$NGX_ADDON_DEPS $ngx_feature_deps"
+    NGX_ADDON_SRCS="$NGX_ADDON_SRCS $ngx_tcp_src"
+else 
+    cat << END
+    $0: error: the ngx_tcp_module addon error.
+END
+    exit 1
+fi
+

@@ -1,0 +1,8 @@
+ngx_feature="nginx_tcp_module"
+ngx_feature_name=
+ngx_feature_run=no
+ngx_feature_incs=
+ngx_feature_path="$ngx_addon_dir/modules $ngx_addon_dir"
+ngx_tcp_src="src/tcp_async/ngx_tcp.c src/tcp_async/ngx_tcp_core_module.c src/tcp_async/ngx_tcp_session.c"
+ngx_tcp_src="$ngx_tcp_src src/tcp_async/ngx_tcp_async_proc.c src/tcp_async/ngx_tcp_log.c"
+CFLAGS="$CFLAGS -Isrc/tcp_async"
