@@ -25,7 +25,7 @@ ngx_alloc(size_t size, ngx_log_t *log)
                       "malloc(%uz) failed", size);
     }
 
-    //ngx_log_debug2(NGX_LOG_DEBUG_ALLOC, log, 0, "malloc: %p:%uz", p, size);
+    ngx_log_debug2(NGX_LOG_DEBUG_ALLOC, log, 0, "malloc: %p:%uz", p, size);
 
     return p;
 }

@@ -1,0 +1,8 @@
+STREAM_MODULES="$STREAM_MODULES ngx_stream_bizlog_module"
+NGX_ADDON_SRCS="$NGX_ADDON_SRCS $ngx_addon_dir/ngx_log_mod.cpp"
+
+STREAM_MODULES="$STREAM_MODULES ngx_tcp_server_module"
+NGX_ADDON_SRCS="$NGX_ADDON_SRCS $ngx_addon_dir/ngx_tcp_server_module.cpp $ngx_addon_dir/ngx_tcp_async_proc.cpp"
+NGX_ADDON_SRCS="$NGX_ADDON_SRCS $ngx_addon_dir/ngx_tcp_def_protocol.cpp"
+
+CFLAGS="$CFLAGS -I src/tcp_svr -DNGX_TCP_SERVER"

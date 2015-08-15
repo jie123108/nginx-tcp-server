@@ -89,11 +89,7 @@ ngx_setproctitle(char *title)
 
     ngx_os_argv[1] = NULL;
 
-	char nginxname[64];
-	memset(nginxname,0,sizeof(nginxname));
-	snprintf(nginxname, sizeof(nginxname), "%s: ", g_nginx_name);
-
-    p = ngx_cpystrn((u_char *) ngx_os_argv[0], (u_char*)nginxname/*(u_char *) "nginx: "*/,
+    p = ngx_cpystrn((u_char *) ngx_os_argv[0], (u_char *) "nginx: ",
                     ngx_os_argv_last - ngx_os_argv[0]);
 
     p = ngx_cpystrn(p, (u_char *) title, ngx_os_argv_last - (char *) p);

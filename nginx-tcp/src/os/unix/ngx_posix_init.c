@@ -40,7 +40,9 @@ ngx_os_init(ngx_log_t *log)
     }
 #endif
 
-    ngx_init_setproctitle(log);
+    if (ngx_init_setproctitle(log) != NGX_OK) {
+        return NGX_ERROR;
+    }
 
     ngx_pagesize = getpagesize();
     ngx_cacheline_size = NGX_CPU_CACHE_LINE;
@@ -82,7 +84,7 @@ ngx_os_init(ngx_log_t *log)
 void
 ngx_os_status(ngx_log_t *log)
 {
-    ngx_log_error(NGX_LOG_NOTICE, log, 0, NGINX_VER);
+    ngx_log_error(NGX_LOG_NOTICE, log, 0, NGINX_VER_BUILD);
 
 #ifdef NGX_COMPILER
     ngx_log_error(NGX_LOG_NOTICE, log, 0, "built by " NGX_COMPILER);
@@ -97,6 +99,8 @@ ngx_os_status(ngx_log_t *log)
                   rlmt.rlim_cur, rlmt.rlim_max);
 }
 
+
+#if 0
 
 ngx_int_t
 ngx_posix_post_conf_init(ngx_log_t *log)
@@ -122,3 +126,5 @@ ngx_posix_post_conf_init(ngx_log_t *log)
 
     return NGX_OK;
 }
+
+#endif

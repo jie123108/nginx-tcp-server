@@ -11,7 +11,7 @@
 
 
 static ngx_int_t ngx_enable_accept_events(ngx_cycle_t *cycle);
-static ngx_int_t ngx_disable_accept_events(ngx_cycle_t *cycle);
+static ngx_int_t ngx_disable_accept_events(ngx_cycle_t *cycle, ngx_uint_t all);
 static void ngx_close_accepted_connection(ngx_connection_t *c);
 
 
@@ -42,10 +42,7 @@ ngx_event_accept(ngx_event_t *ev)
 
     ecf = ngx_event_get_conf(ngx_cycle->conf_ctx, ngx_event_core_module);
 
-    if (ngx_event_flags & NGX_USE_RTSIG_EVENT) {
-        ev->available = 1;
-
-    } else if (!(ngx_event_flags & NGX_USE_KQUEUE_EVENT)) {
+    if (!(ngx_event_flags & NGX_USE_KQUEUE_EVENT)) {
         ev->available = ecf->multi_accept;
     }
 
@@ -70,7 +67,7 @@ ngx_event_accept(ngx_event_t *ev)
         s = accept(lc->fd, (struct sockaddr *) sa, &socklen);
 #endif
 
-        if (s == -1) {
+        if (s == (ngx_socket_t) -1) {
             err = ngx_socket_errno;
 
             if (err == NGX_EAGAIN) {
@@ -112,7 +109,7 @@ ngx_event_accept(ngx_event_t *ev)
             }
 
             if (err == NGX_EMFILE || err == NGX_ENFILE) {
-                if (ngx_disable_accept_events((ngx_cycle_t *) ngx_cycle)
+                if (ngx_disable_accept_events((ngx_cycle_t *) ngx_cycle, 1)
                     != NGX_OK)
                 {
                     return;
@@ -176,10 +173,10 @@ ngx_event_accept(ngx_event_t *ev)
             return;
         }
 
-        /* set a blocking mode for aio and non-blocking mode for others */
+        /* set a blocking mode for iocp and non-blocking mode for others */
 
         if (ngx_inherited_nonblocking) {
-            if (ngx_event_flags & NGX_USE_AIO_EVENT) {
+            if (ngx_event_flags & NGX_USE_IOCP_EVENT) {
                 if (ngx_blocking(s) == -1) {
                     ngx_log_error(NGX_LOG_ALERT, ev->log, ngx_socket_errno,
                                   ngx_blocking_n " failed");
@@ -189,7 +186,7 @@ ngx_event_accept(ngx_event_t *ev)
             }
 
         } else {
-            if (!(ngx_event_flags & (NGX_USE_AIO_EVENT|NGX_USE_RTSIG_EVENT))) {
+            if (!(ngx_event_flags & NGX_USE_IOCP_EVENT)) {
                 if (ngx_nonblocking(s) == -1) {
                     ngx_log_error(NGX_LOG_ALERT, ev->log, ngx_socket_errno,
                                   ngx_nonblocking_n " failed");
@@ -212,6 +209,7 @@ ngx_event_accept(ngx_event_t *ev)
         c->socklen = socklen;
         c->listening = ls;
         c->local_sockaddr = ls->sockaddr;
+        c->local_socklen = ls->socklen;
 
         c->unexpected_eof = 1;
 
@@ -231,8 +229,7 @@ ngx_event_accept(ngx_event_t *ev)
 
         wev->ready = 1;
 
-        if (ngx_event_flags & (NGX_USE_AIO_EVENT|NGX_USE_RTSIG_EVENT)) {
-            /* rtsig, aio, iocp */
+        if (ngx_event_flags & NGX_USE_IOCP_EVENT) {
             rev->ready = 1;
         }
 
@@ -256,16 +253,9 @@ ngx_event_accept(ngx_event_t *ev)
          */
 
         c->number = ngx_atomic_fetch_add(ngx_connection_counter, 1);
-	 	
+
 #if (NGX_STAT_STUB)
         (void) ngx_atomic_fetch_add(ngx_stat_handled, 1);
-#endif
-
-#if (NGX_THREADS)
-        rev->lock = &c->lock;
-        wev->lock = &c->lock;
-        rev->own_lock = &c->lock;
-        wev->own_lock = &c->lock;
 #endif
 
         if (ls->addr_ntop) {
@@ -275,7 +265,8 @@ ngx_event_accept(ngx_event_t *ev)
                 return;
             }
 
-            c->addr_text.len = ngx_sock_ntop(c->sockaddr, c->addr_text.data,
+            c->addr_text.len = ngx_sock_ntop(c->sockaddr, c->socklen,
+                                             c->addr_text.data,
                                              ls->addr_text_max_len, 0);
             if (c->addr_text.len == 0) {
                 ngx_close_accepted_connection(c);
@@ -286,9 +277,11 @@ ngx_event_accept(ngx_event_t *ev)
 #if (NGX_DEBUG)
         {
 
+        ngx_str_t             addr;
         struct sockaddr_in   *sin;
         ngx_cidr_t           *cidr;
         ngx_uint_t            i;
+        u_char                text[NGX_SOCKADDR_STRLEN];
 #if (NGX_HAVE_INET6)
         struct sockaddr_in6  *sin6;
         ngx_uint_t            n;
@@ -296,7 +289,7 @@ ngx_event_accept(ngx_event_t *ev)
 
         cidr = ecf->debug_connection.elts;
         for (i = 0; i < ecf->debug_connection.nelts; i++) {
-            if (cidr[i].family != c->sockaddr->sa_family) {
+            if (cidr[i].family != (ngx_uint_t) c->sockaddr->sa_family) {
                 goto next;
             }
 
@@ -338,11 +331,17 @@ ngx_event_accept(ngx_event_t *ev)
             continue;
         }
 
+        if (log->log_level & NGX_LOG_DEBUG_EVENT) {
+            addr.data = text;
+            addr.len = ngx_sock_ntop(c->sockaddr, c->socklen, text,
+                                     NGX_SOCKADDR_STRLEN, 1);
+
+            ngx_log_debug3(NGX_LOG_DEBUG_EVENT, log, 0,
+                           "*%uA accept: %V fd:%d", c->number, &addr, s);
+        }
+
         }
 #endif
-
-        ngx_log_debug3(NGX_LOG_DEBUG_EVENT, log, 0,
-                       "*%d accept: %V fd:%d", c->number, &c->addr_text, s);
 
         if (ngx_add_conn && (ngx_event_flags & NGX_USE_EPOLL_EVENT) == 0) {
             if (ngx_add_conn(c) == NGX_ERROR) {
@@ -363,27 +362,16 @@ ngx_event_accept(ngx_event_t *ev)
     } while (ev->available);
 }
 
-ngx_uint_t ngx_can_accept(ngx_cycle_t *cycle){
-	ngx_uint_t avg_conn = ngx_conn_sum->conn_sum*100 / ngx_conn_sum->processes;
-	//printf("######### uid:%d avg_conn:%d cur_processed: %d\n", (int)ngx_getpid(),
-	//			(int)avg_conn, (int)ngx_process_conn->conns*100);
-	return (ngx_process_conn->conns*100 <= avg_conn);
-}
 
 ngx_int_t
 ngx_trylock_accept_mutex(ngx_cycle_t *cycle)
 {
-    ngx_event_conf_t    *ecf;
-    ecf = ngx_event_get_conf(cycle->conf_ctx, ngx_event_core_module);
+    if (ngx_shmtx_trylock(&ngx_accept_mutex)) {
 
-    if (ngx_can_accept(cycle) && ngx_shmtx_trylock(&ngx_accept_mutex)) {
         ngx_log_debug0(NGX_LOG_DEBUG_EVENT, cycle->log, 0,
                        "accept mutex locked");
 
-        if (ngx_accept_mutex_held
-            && ngx_accept_events == 0
-            && !(ngx_event_flags & NGX_USE_RTSIG_EVENT))
-        {
+        if (ngx_accept_mutex_held && ngx_accept_events == 0) {
             return NGX_OK;
         }
 
@@ -402,7 +390,7 @@ ngx_trylock_accept_mutex(ngx_cycle_t *cycle)
                    "accept mutex lock failed: %ui", ngx_accept_mutex_held);
 
     if (ngx_accept_mutex_held) {
-        if (ngx_disable_accept_events(cycle) == NGX_ERROR) {
+        if (ngx_disable_accept_events(cycle, 0) == NGX_ERROR) {
             return NGX_ERROR;
         }
 
@@ -425,20 +413,12 @@ ngx_enable_accept_events(ngx_cycle_t *cycle)
 
         c = ls[i].connection;
 
-        if (c->read->active) {
+        if (c == NULL || c->read->active) {
             continue;
         }
 
-        if (ngx_event_flags & NGX_USE_RTSIG_EVENT) {
-
-            if (ngx_add_conn(c) == NGX_ERROR) {
-                return NGX_ERROR;
-            }
-
-        } else {
-            if (ngx_add_event(c->read, NGX_READ_EVENT, 0) == NGX_ERROR) {
-                return NGX_ERROR;
-            }
+        if (ngx_add_event(c->read, NGX_READ_EVENT, 0) == NGX_ERROR) {
+            return NGX_ERROR;
         }
     }
 
@@ -447,7 +427,7 @@ ngx_enable_accept_events(ngx_cycle_t *cycle)
 
 
 static ngx_int_t
-ngx_disable_accept_events(ngx_cycle_t *cycle)
+ngx_disable_accept_events(ngx_cycle_t *cycle, ngx_uint_t all)
 {
     ngx_uint_t         i;
     ngx_listening_t   *ls;
@@ -458,21 +438,27 @@ ngx_disable_accept_events(ngx_cycle_t *cycle)
 
         c = ls[i].connection;
 
-        if (!c->read->active) {
+        if (c == NULL || !c->read->active) {
             continue;
         }
 
-        if (ngx_event_flags & NGX_USE_RTSIG_EVENT) {
-            if (ngx_del_conn(c, NGX_DISABLE_EVENT) == NGX_ERROR) {
-                return NGX_ERROR;
-            }
+#if (NGX_HAVE_REUSEPORT)
 
-        } else {
-            if (ngx_del_event(c->read, NGX_READ_EVENT, NGX_DISABLE_EVENT)
-                == NGX_ERROR)
-            {
-                return NGX_ERROR;
-            }
+        /*
+         * do not disable accept on worker's own sockets
+         * when disabling accept events due to accept mutex
+         */
+
+        if (ls[i].reuseport && !all) {
+            continue;
+        }
+
+#endif
+
+        if (ngx_del_event(c->read, NGX_READ_EVENT, NGX_DISABLE_EVENT)
+            == NGX_ERROR)
+        {
+            return NGX_ERROR;
         }
     }
 

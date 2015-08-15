@@ -9,8 +9,6 @@
 #include <ngx_core.h>
 #include <nginx.h>
 
-//nginx ½ø³ÌÃû¡£
-char g_nginx_name[64];
 
 static ngx_int_t ngx_add_inherited_sockets(ngx_cycle_t *cycle);
 static ngx_int_t ngx_get_options(int argc, char *const *argv);
@@ -22,6 +20,8 @@ static char *ngx_set_user(ngx_conf_t *cf, ngx_command_t *cmd, void *conf);
 static char *ngx_set_env(ngx_conf_t *cf, ngx_command_t *cmd, void *conf);
 static char *ngx_set_priority(ngx_conf_t *cf, ngx_command_t *cmd, void *conf);
 static char *ngx_set_cpu_affinity(ngx_conf_t *cf, ngx_command_t *cmd,
+    void *conf);
+static char *ngx_set_worker_processes(ngx_conf_t *cf, ngx_command_t *cmd,
     void *conf);
 
 
@@ -71,9 +71,9 @@ static ngx_command_t  ngx_core_commands[] = {
 
     { ngx_string("worker_processes"),
       NGX_MAIN_CONF|NGX_DIRECT_CONF|NGX_CONF_TAKE1,
-      ngx_conf_set_num_slot,
+      ngx_set_worker_processes,
       0,
-      offsetof(ngx_core_conf_t, worker_processes),
+      0,
       NULL },
 
     { ngx_string("debug_points"),
@@ -118,13 +118,6 @@ static ngx_command_t  ngx_core_commands[] = {
       offsetof(ngx_core_conf_t, rlimit_core),
       NULL },
 
-    { ngx_string("worker_rlimit_sigpending"),
-      NGX_MAIN_CONF|NGX_DIRECT_CONF|NGX_CONF_TAKE1,
-      ngx_conf_set_num_slot,
-      0,
-      offsetof(ngx_core_conf_t, rlimit_sigpending),
-      NULL },
-
     { ngx_string("working_directory"),
       NGX_MAIN_CONF|NGX_DIRECT_CONF|NGX_CONF_TAKE1,
       ngx_conf_set_str_slot,
@@ -138,24 +131,6 @@ static ngx_command_t  ngx_core_commands[] = {
       0,
       0,
       NULL },
-
-#if (NGX_THREADS)
-
-    { ngx_string("worker_threads"),
-      NGX_MAIN_CONF|NGX_DIRECT_CONF|NGX_CONF_TAKE1,
-      ngx_conf_set_num_slot,
-      0,
-      offsetof(ngx_core_conf_t, worker_threads),
-      NULL },
-
-    { ngx_string("thread_stack_size"),
-      NGX_MAIN_CONF|NGX_DIRECT_CONF|NGX_CONF_TAKE1,
-      ngx_conf_set_size_slot,
-      0,
-      offsetof(ngx_core_conf_t, thread_stack_size),
-      NULL },
-
-#endif
 
       ngx_null_command
 };
@@ -197,24 +172,15 @@ static char        *ngx_signal;
 
 static char **ngx_os_environ;
 
-static void ngx_get_process_name(int argc, char *const *argv){
-	const char* program = argv[0];
-	
-	const char* procname = strrchr((char*)program, '/');
-	if(procname == NULL){
-		procname = program;
-	}else{	
-		procname++;
-	}
-	strncpy(g_nginx_name, procname, sizeof(g_nginx_name)-1);
-}
 
 int ngx_cdecl
 main(int argc, char *const *argv)
 {
-    ngx_int_t         i;
+    ngx_buf_t        *b;
     ngx_log_t        *log;
+    ngx_uint_t        i;
     ngx_cycle_t      *cycle, init_cycle;
+    ngx_conf_dump_t  *cd;
     ngx_core_conf_t  *ccf;
 
     ngx_debug_init();
@@ -227,14 +193,12 @@ main(int argc, char *const *argv)
         return 1;
     }
 
-	ngx_get_process_name(argc, argv);
-	
     if (ngx_show_version) {
-        ngx_write_stderr("nginx version: " NGINX_VER NGX_LINEFEED);
+        ngx_write_stderr("nginx version: " NGINX_VER_BUILD NGX_LINEFEED);
 
         if (ngx_show_help) {
             ngx_write_stderr(
-                "Usage: nginx [-?hvVtq] [-s signal] [-c filename] "
+                "Usage: nginx [-?hvVtTq] [-s signal] [-c filename] "
                              "[-p prefix] [-g directives]" NGX_LINEFEED
                              NGX_LINEFEED
                 "Options:" NGX_LINEFEED
@@ -243,6 +207,8 @@ main(int argc, char *const *argv)
                 "  -V            : show version and configure options then exit"
                                    NGX_LINEFEED
                 "  -t            : test configuration and exit" NGX_LINEFEED
+                "  -T            : test configuration, dump it and exit"
+                                   NGX_LINEFEED
                 "  -q            : suppress non-error messages "
                                    "during configuration testing" NGX_LINEFEED
                 "  -s signal     : send signal to a master process: "
@@ -261,18 +227,30 @@ main(int argc, char *const *argv)
         }
 
         if (ngx_show_configure) {
-            ngx_write_stderr(
+
 #ifdef NGX_COMPILER
-                "built by " NGX_COMPILER NGX_LINEFEED
+            ngx_write_stderr("built by " NGX_COMPILER NGX_LINEFEED);
 #endif
+
 #if (NGX_SSL)
+            if (SSLeay() == SSLEAY_VERSION_NUMBER) {
+                ngx_write_stderr("built with " OPENSSL_VERSION_TEXT
+                                 NGX_LINEFEED);
+            } else {
+                ngx_write_stderr("built with " OPENSSL_VERSION_TEXT
+                                 " (running with ");
+                ngx_write_stderr((char *) (uintptr_t)
+                                 SSLeay_version(SSLEAY_VERSION));
+                ngx_write_stderr(")" NGX_LINEFEED);
+            }
 #ifdef SSL_CTRL_SET_TLSEXT_HOSTNAME
-                "TLS SNI support enabled" NGX_LINEFEED
+            ngx_write_stderr("TLS SNI support enabled" NGX_LINEFEED);
 #else
-                "TLS SNI support disabled" NGX_LINEFEED
+            ngx_write_stderr("TLS SNI support disabled" NGX_LINEFEED);
 #endif
 #endif
-                "configure arguments:" NGX_CONFIGURE NGX_LINEFEED);
+
+            ngx_write_stderr("configure arguments:" NGX_CONFIGURE NGX_LINEFEED);
         }
 
         if (!ngx_test_config) {
@@ -359,6 +337,23 @@ main(int argc, char *const *argv)
                            cycle->conf_file.data);
         }
 
+        if (ngx_dump_config) {
+            cd = cycle->config_dump.elts;
+
+            for (i = 0; i < cycle->config_dump.nelts; i++) {
+
+                ngx_write_stdout("# configuration file ");
+                (void) ngx_write_fd(ngx_stdout, cd[i].name.data,
+                                    cd[i].name.len);
+                ngx_write_stdout(":" NGX_LINEFEED);
+
+                b = cd[i].buffer;
+
+                (void) ngx_write_fd(ngx_stdout, b->pos, b->last - b->pos);
+                ngx_write_stdout(NGX_LINEFEED);
+            }
+        }
+
         return 0;
     }
 
@@ -400,13 +395,8 @@ main(int argc, char *const *argv)
         return 1;
     }
 
-    if (cycle->log->file->fd != ngx_stderr) {
-
-        if (ngx_set_stderr(cycle->log->file->fd) == NGX_FILE_ERROR) {
-            ngx_log_error(NGX_LOG_EMERG, cycle->log, ngx_errno,
-                          ngx_set_stderr_n " failed");
-            return 1;
-        }
+    if (ngx_log_redirect_stderr(cycle) != NGX_OK) {
+        return 1;
     }
 
     if (log->file->fd != ngx_stderr) {
@@ -465,7 +455,7 @@ ngx_add_inherited_sockets(ngx_cycle_t *cycle)
 
             v = p + 1;
 
-            ls = (ngx_listening_t*)ngx_array_push(&cycle->listening);
+            ls = ngx_array_push(&cycle->listening);
             if (ls == NULL) {
                 return NGX_ERROR;
             }
@@ -496,7 +486,7 @@ ngx_set_environment(ngx_cycle_t *cycle, ngx_uint_t *last)
         return ccf->environment;
     }
 
-    var = (ngx_str_t*)ccf->env.elts;
+    var = ccf->env.elts;
 
     for (i = 0; i < ccf->env.nelts; i++) {
         if (ngx_strcmp(var[i].data, "TZ") == 0
@@ -607,6 +597,10 @@ ngx_exec_new_binary(ngx_cycle_t *cycle, char *const *argv)
     var = ngx_alloc(sizeof(NGINX_VAR)
                     + cycle->listening.nelts * (NGX_INT32_LEN + 1) + 2,
                     cycle->log);
+    if (var == NULL) {
+        ngx_free(env);
+        return NGX_INVALID_PID;
+    }
 
     p = ngx_cpymem(var, NGINX_VAR "=", sizeof(NGINX_VAR));
 
@@ -646,7 +640,7 @@ ngx_exec_new_binary(ngx_cycle_t *cycle, char *const *argv)
 
     ccf = (ngx_core_conf_t *) ngx_get_conf(cycle->conf_ctx, ngx_core_module);
 
-    if (ngx_rename_file(ccf->pid.data, ccf->oldpid.data) != NGX_OK) {
+    if (ngx_rename_file(ccf->pid.data, ccf->oldpid.data) == NGX_FILE_ERROR) {
         ngx_log_error(NGX_LOG_ALERT, cycle->log, ngx_errno,
                       ngx_rename_file_n " %s to %s failed "
                       "before executing new binary process \"%s\"",
@@ -661,7 +655,9 @@ ngx_exec_new_binary(ngx_cycle_t *cycle, char *const *argv)
     pid = ngx_execute(cycle, &ctx);
 
     if (pid == NGX_INVALID_PID) {
-        if (ngx_rename_file(ccf->oldpid.data, ccf->pid.data) != NGX_OK) {
+        if (ngx_rename_file(ccf->oldpid.data, ccf->pid.data)
+            == NGX_FILE_ERROR)
+        {
             ngx_log_error(NGX_LOG_ALERT, cycle->log, ngx_errno,
                           ngx_rename_file_n " %s back to %s failed after "
                           "an attempt to execute new binary process \"%s\"",
@@ -712,6 +708,11 @@ ngx_get_options(int argc, char *const *argv)
 
             case 't':
                 ngx_test_config = 1;
+                break;
+
+            case 'T':
+                ngx_test_config = 1;
+                ngx_dump_config = 1;
                 break;
 
             case 'q':
@@ -851,7 +852,7 @@ ngx_process_options(ngx_cycle_t *cycle)
         len = ngx_strlen(ngx_prefix);
         p = ngx_prefix;
 
-        if (!ngx_path_separator(*p)) {
+        if (len && !ngx_path_separator(p[len - 1])) {
             p = ngx_pnalloc(cycle->pool, len + 1);
             if (p == NULL) {
                 return NGX_ERROR;
@@ -966,15 +967,9 @@ ngx_core_module_create_conf(ngx_cycle_t *cycle)
 
     ccf->rlimit_nofile = NGX_CONF_UNSET;
     ccf->rlimit_core = NGX_CONF_UNSET;
-    ccf->rlimit_sigpending = NGX_CONF_UNSET;
 
     ccf->user = (ngx_uid_t) NGX_CONF_UNSET_UINT;
     ccf->group = (ngx_gid_t) NGX_CONF_UNSET_UINT;
-
-#if (NGX_THREADS)
-    ccf->worker_threads = NGX_CONF_UNSET;
-    ccf->thread_stack_size = NGX_CONF_UNSET_SIZE;
-#endif
 
     if (ngx_array_init(&ccf->env, cycle->pool, 1, sizeof(ngx_str_t))
         != NGX_OK)
@@ -1009,14 +1004,6 @@ ngx_core_module_init_conf(ngx_cycle_t *cycle, void *conf)
                       "the number of \"worker_cpu_affinity\" masks, "
                       "using last mask for remaining worker processes");
     }
-
-#endif
-
-#if (NGX_THREADS)
-
-    ngx_conf_init_value(ccf->worker_threads, 0);
-    ngx_threads_n = ccf->worker_threads;
-    ngx_conf_init_size_value(ccf->thread_stack_size, 2 * 1024 * 1024);
 
 #endif
 
@@ -1343,4 +1330,33 @@ ngx_get_cpu_affinity(ngx_uint_t n)
     }
 
     return ccf->cpu_affinity[ccf->cpu_affinity_n - 1];
+}
+
+
+static char *
+ngx_set_worker_processes(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
+{
+    ngx_str_t        *value;
+    ngx_core_conf_t  *ccf;
+
+    ccf = (ngx_core_conf_t *) conf;
+
+    if (ccf->worker_processes != NGX_CONF_UNSET) {
+        return "is duplicate";
+    }
+
+    value = (ngx_str_t *) cf->args->elts;
+
+    if (ngx_strcmp(value[1].data, "auto") == 0) {
+        ccf->worker_processes = ngx_ncpu;
+        return NGX_CONF_OK;
+    }
+
+    ccf->worker_processes = ngx_atoi(value[1].data, value[1].len);
+
+    if (ccf->worker_processes == NGX_ERROR) {
+        return "invalid value";
+    }
+
+    return NGX_CONF_OK;
 }

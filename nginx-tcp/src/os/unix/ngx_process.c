@@ -291,9 +291,14 @@ ngx_init_signals(ngx_log_t *log)
         sa.sa_handler = sig->handler;
         sigemptyset(&sa.sa_mask);
         if (sigaction(sig->signo, &sa, NULL) == -1) {
+#if (NGX_VALGRIND)
+            ngx_log_error(NGX_LOG_ALERT, log, ngx_errno,
+                          "sigaction(%s) failed, ignored", sig->signame);
+#else
             ngx_log_error(NGX_LOG_EMERG, log, ngx_errno,
                           "sigaction(%s) failed", sig->signame);
             return NGX_ERROR;
+#endif
         }
     }
 
@@ -474,8 +479,6 @@ ngx_process_get_status(void)
                 return;
             }
 
-#if (NGX_SOLARIS || NGX_FREEBSD)
-
             /*
              * Solaris always calls the signal handler for each exited process
              * despite waitpid() may be already called for this process.
@@ -490,8 +493,6 @@ ngx_process_get_status(void)
                               "waitpid() failed");
                 return;
             }
-
-#endif
 
             ngx_log_error(NGX_LOG_ALERT, ngx_cycle->log, err,
                           "waitpid() failed");
@@ -550,20 +551,6 @@ ngx_unlock_mutexes(ngx_pid_t pid)
     ngx_list_part_t  *part;
     ngx_slab_pool_t  *sp;
 
-	for(i=0;i<ngx_conn_sum->processes;i++){
-		if(ngx_conn_sum->conns[i].pid == pid){
-            ngx_log_error(NGX_LOG_ALERT, ngx_cycle->log, 0,
-                          "######## nginx process [%d] exit! #########", pid);
-			printf("######### find exit pid: %d ##########\n", pid);
-			//ngx_atomic_fetch_add(&ngx_conn_sum->processes, -1);
-		    ngx_atomic_fetch_add(&ngx_conn_sum->conn_sum,-1*ngx_conn_sum->conns[i].conns);			
-			(void)ngx_shmtx_force_unlock(&ngx_conn_sum->conns[i].mutex, pid);
-			ngx_conn_sum->conns[i].pid = 0;
-			ngx_conn_sum->conns[i].conns = 0;
-			break;
-		}
-	}
-	
     /*
      * unlock the accept mutex if the abnormally exited process
      * held it

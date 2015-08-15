@@ -5,8 +5,8 @@
  */
 
 
-#ifndef _NGX_HTTP_CONF_FILE_H_INCLUDED_
-#define _NGX_HTTP_CONF_FILE_H_INCLUDED_
+#ifndef _NGX_CONF_FILE_H_INCLUDED_
+#define _NGX_CONF_FILE_H_INCLUDED_
 
 
 #include <ngx_config.h>
@@ -45,7 +45,7 @@
 #define NGX_CONF_ANY         0x00000400
 #define NGX_CONF_1MORE       0x00000800
 #define NGX_CONF_2MORE       0x00001000
-#define NGX_CONF_MULTI       0x00002000
+#define NGX_CONF_MULTI       0x00000000  /* compatibility */
 
 #define NGX_DIRECT_CONF      0x00010000
 
@@ -91,17 +91,8 @@ struct ngx_open_file_s {
     ngx_fd_t              fd;
     ngx_str_t             name;
 
-    u_char               *buffer;
-    u_char               *pos;
-    u_char               *last;
-
-#if 0
-    /* e.g. append mode, error_log */
-    ngx_uint_t            flags;
-    /* e.g. reopen db file */
-    ngx_uint_t          (*handler)(void *data, ngx_open_file_t *file);
+    void                (*flush)(ngx_open_file_t *file, ngx_log_t *log);
     void                 *data;
-#endif
 };
 
 
@@ -155,8 +146,15 @@ typedef struct {
 typedef struct {
     ngx_file_t            file;
     ngx_buf_t            *buffer;
+    ngx_buf_t            *dump;
     ngx_uint_t            line;
 } ngx_conf_file_t;
+
+
+typedef struct {
+    ngx_str_t             name;
+    ngx_buf_t            *buffer;
+} ngx_conf_dump_t;
 
 
 typedef char *(*ngx_conf_handler_pt)(ngx_conf_t *cf,
@@ -317,6 +315,7 @@ char *ngx_conf_check_num_bounds(ngx_conf_t *cf, void *post, void *data);
 
 char *ngx_conf_param(ngx_conf_t *cf);
 char *ngx_conf_parse(ngx_conf_t *cf, ngx_str_t *filename);
+char *ngx_conf_include(ngx_conf_t *cf, ngx_command_t *cmd, void *conf);
 
 
 ngx_int_t ngx_conf_full_name(ngx_cycle_t *cycle, ngx_str_t *name,
@@ -345,4 +344,4 @@ extern ngx_uint_t     ngx_max_module;
 extern ngx_module_t  *ngx_modules[];
 
 
-#endif /* _NGX_HTTP_CONF_FILE_H_INCLUDED_ */
+#endif /* _NGX_CONF_FILE_H_INCLUDED_ */

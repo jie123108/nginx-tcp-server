@@ -53,7 +53,9 @@ typedef struct {
 
 #ifdef __CYGWIN__
 
+#ifndef NGX_HAVE_CASELESS_FILESYSTEM
 #define NGX_HAVE_CASELESS_FILESYSTEM  1
+#endif
 
 #define ngx_open_file(name, mode, create, access)                            \
     open((const char *) name, mode|create|O_BINARY, access)
@@ -72,8 +74,8 @@ typedef struct {
 #define NGX_FILE_RDWR            O_RDWR
 #define NGX_FILE_CREATE_OR_OPEN  O_CREAT
 #define NGX_FILE_OPEN            0
-#define NGX_FILE_TRUNCATE        O_CREAT|O_TRUNC
-#define NGX_FILE_APPEND          O_WRONLY|O_APPEND
+#define NGX_FILE_TRUNCATE        (O_CREAT|O_TRUNC)
+#define NGX_FILE_APPEND          (O_WRONLY|O_APPEND)
 #define NGX_FILE_NONBLOCK        O_NONBLOCK
 
 #if (NGX_HAVE_OPENAT)
@@ -86,13 +88,16 @@ typedef struct {
 #endif
 
 #if defined(O_SEARCH)
-#define NGX_FILE_SEARCH          O_SEARCH|NGX_FILE_DIRECTORY
+#define NGX_FILE_SEARCH          (O_SEARCH|NGX_FILE_DIRECTORY)
 
 #elif defined(O_EXEC)
-#define NGX_FILE_SEARCH          O_EXEC|NGX_FILE_DIRECTORY
+#define NGX_FILE_SEARCH          (O_EXEC|NGX_FILE_DIRECTORY)
+
+#elif (NGX_HAVE_O_PATH)
+#define NGX_FILE_SEARCH          (O_PATH|O_RDONLY|NGX_FILE_DIRECTORY)
 
 #else
-#define NGX_FILE_SEARCH          O_RDONLY|NGX_FILE_DIRECTORY
+#define NGX_FILE_SEARCH          (O_RDONLY|NGX_FILE_DIRECTORY)
 #endif
 
 #endif /* NGX_HAVE_OPENAT */
@@ -137,7 +142,7 @@ ssize_t ngx_write_chain_to_file(ngx_file_t *file, ngx_chain_t *ce,
  * and in this case gcc 4.3 ignores (void) cast
  */
 static ngx_inline ssize_t
-ngx_write_fd(ngx_fd_t fd, const void *buf, size_t n)
+ngx_write_fd(ngx_fd_t fd, void *buf, size_t n)
 {
     return write(fd, buf, n);
 }
@@ -187,17 +192,6 @@ ngx_int_t ngx_set_file_time(u_char *name, ngx_fd_t fd, time_t s);
 
 ngx_int_t ngx_create_file_mapping(ngx_file_mapping_t *fm);
 void ngx_close_file_mapping(ngx_file_mapping_t *fm);
-
-
-#if (NGX_HAVE_CASELESS_FILESYSTEM)
-
-#define ngx_filename_cmp(s1, s2, n)  strncasecmp((char *) s1, (char *) s2, n)
-
-#else
-
-#define ngx_filename_cmp         ngx_memcmp
-
-#endif
 
 
 #define ngx_realpath(p, r)       (u_char *) realpath((char *) p, (char *) r)
@@ -374,6 +368,7 @@ size_t ngx_fs_bsize(u_char *name);
 #endif
 
 
+#define ngx_stdout               STDOUT_FILENO
 #define ngx_stderr               STDERR_FILENO
 #define ngx_set_stderr(fd)       dup2(fd, STDERR_FILENO)
 #define ngx_set_stderr_n         "dup2(STDERR_FILENO)"
@@ -381,11 +376,17 @@ size_t ngx_fs_bsize(u_char *name);
 
 #if (NGX_HAVE_FILE_AIO)
 
+ngx_int_t ngx_file_aio_init(ngx_file_t *file, ngx_pool_t *pool);
 ssize_t ngx_file_aio_read(ngx_file_t *file, u_char *buf, size_t size,
     off_t offset, ngx_pool_t *pool);
 
 extern ngx_uint_t  ngx_file_aio;
 
+#endif
+
+#if (NGX_THREADS)
+ssize_t ngx_thread_read(ngx_thread_task_t **taskp, ngx_file_t *file,
+    u_char *buf, size_t size, off_t offset, ngx_pool_t *pool);
 #endif
 
 

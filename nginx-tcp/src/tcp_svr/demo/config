@@ -1,0 +1,10 @@
+
+NGX_ADDON_SRCS="$NGX_ADDON_SRCS $ngx_addon_dir/test_service.cpp $ngx_addon_dir/test_impl.cpp"
+NGX_ADDON_SRCS="$NGX_ADDON_SRCS $ngx_addon_dir/mylib/ConnPool.cpp $ngx_addon_dir/mylib/IniFile.cpp"
+NGX_ADDON_SRCS="$NGX_ADDON_SRCS $ngx_addon_dir/mylib/Sockcli.cpp"
+
+#MYSQLLIB=/usr/local/mysql/lib/libmysqlclient.a
+
+CFLAGS="$CFLAGS `mysql_config --include` "
+CORE_LIBS="$CORE_LIBS  `mysql_config --libs`"
+

@@ -44,7 +44,7 @@ ngx_shmtx_create(ngx_shmtx_t *mtx, ngx_shmtx_sh_t *addr, u_char *name)
 
 
 void
-ngx_shmtx_destory(ngx_shmtx_t *mtx)
+ngx_shmtx_destroy(ngx_shmtx_t *mtx)
 {
 #if (NGX_HAVE_POSIX_SEM)
 
@@ -101,6 +101,7 @@ ngx_shmtx_lock(ngx_shmtx_t *mtx)
             (void) ngx_atomic_fetch_add(mtx->wait, 1);
 
             if (*mtx->lock == 0 && ngx_atomic_cmp_set(mtx->lock, 0, ngx_pid)) {
+                (void) ngx_atomic_fetch_add(mtx->wait, -1);
                 return;
             }
 
@@ -117,10 +118,10 @@ ngx_shmtx_lock(ngx_shmtx_t *mtx)
                                   "sem_wait() failed while waiting on shmtx");
                     break;
                 }
-
-                ngx_log_debug0(NGX_LOG_DEBUG_CORE, ngx_cycle->log, 0,
-                               "shmtx awoke");
             }
+
+            ngx_log_debug0(NGX_LOG_DEBUG_CORE, ngx_cycle->log, 0,
+                           "shmtx awoke");
 
             continue;
         }
@@ -174,7 +175,7 @@ ngx_shmtx_wakeup(ngx_shmtx_t *mtx)
 
         wait = *mtx->wait;
 
-        if (wait == 0) {
+        if ((ngx_atomic_int_t) wait <= 0) {
             return;
         }
 
@@ -208,7 +209,7 @@ ngx_shmtx_create(ngx_shmtx_t *mtx, ngx_shmtx_sh_t *addr, u_char *name)
             return NGX_OK;
         }
 
-        ngx_shmtx_destory(mtx);
+        ngx_shmtx_destroy(mtx);
     }
 
     mtx->fd = ngx_open_file(name, NGX_FILE_RDWR, NGX_FILE_CREATE_OR_OPEN,
@@ -232,7 +233,7 @@ ngx_shmtx_create(ngx_shmtx_t *mtx, ngx_shmtx_sh_t *addr, u_char *name)
 
 
 void
-ngx_shmtx_destory(ngx_shmtx_t *mtx)
+ngx_shmtx_destroy(ngx_shmtx_t *mtx)
 {
     if (ngx_close_file(mtx->fd) == NGX_FILE_ERROR) {
         ngx_log_error(NGX_LOG_ALERT, ngx_cycle->log, ngx_errno,
@@ -258,7 +259,7 @@ ngx_shmtx_trylock(ngx_shmtx_t *mtx)
 
 #if __osf__ /* Tru64 UNIX */
 
-    if (err == NGX_EACCESS) {
+    if (err == NGX_EACCES) {
         return 0;
     }
 

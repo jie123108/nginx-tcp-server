@@ -12,11 +12,20 @@
 #if (NGX_HPUX)
 #define _XOPEN_SOURCE
 #define _XOPEN_SOURCE_EXTENDED  1
+#define _HPUX_ALT_XOPEN_SOCKET_API
 #endif
 
 
 #if (NGX_TRU64)
 #define _REENTRANT
+#endif
+
+
+#if (NGX_GNU_HURD)
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE             /* accept4() */
+#endif
+#define _FILE_OFFSET_BITS       64
 #endif
 
 
@@ -38,6 +47,7 @@
 #include <stddef.h>             /* offsetof() */
 #include <stdio.h>
 #include <stdlib.h>
+#include <ctype.h>
 #include <errno.h>
 #include <string.h>
 #include <signal.h>

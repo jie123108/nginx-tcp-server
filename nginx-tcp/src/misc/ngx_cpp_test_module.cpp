@@ -1,5 +1,5 @@
 
-// stub module to test header files' C++ compatibilty
+// stub module to test header files' C++ compatibility
 
 extern "C" {
   #include <ngx_config.h>
@@ -19,6 +19,8 @@ extern "C" {
 // nginx header files should go before other, because they define 64-bit off_t
 // #include <string>
 
+
+void ngx_cpp_test_handler(void *data);
 
 void
 ngx_cpp_test_handler(void *data)

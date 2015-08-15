@@ -43,6 +43,29 @@ if test -n "$CFLAGS"; then
             ngx_include_opt="-I"
         ;;
 
+        sunc)
+
+            case "$NGX_MACHINE" in
+
+                i86pc)
+                    NGX_AUX=" src/os/unix/ngx_sunpro_x86.il"
+                ;;
+
+                sun4u | sun4v)
+                    NGX_AUX=" src/os/unix/ngx_sunpro_sparc64.il"
+                ;;
+
+            esac
+
+            case $CPU in
+
+                amd64)
+                    NGX_AUX=" src/os/unix/ngx_sunpro_amd64.il"
+                ;;
+
+            esac
+        ;;
+
     esac
 
 else
@@ -54,6 +77,12 @@ else
             #     4.0.0, 4.0.1, 4.1.0
 
             . auto/cc/gcc
+        ;;
+
+        clang)
+            # Clang C compiler
+
+            . auto/cc/clang
         ;;
 
         icc)

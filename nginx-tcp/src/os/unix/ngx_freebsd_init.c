@@ -72,13 +72,13 @@ sysctl_t sysctls[] = {
 
 
 void
-ngx_debug_init()
+ngx_debug_init(void)
 {
 #if (NGX_DEBUG_MALLOC)
 
-#if __FreeBSD_version >= 500014
+#if __FreeBSD_version >= 500014 && __FreeBSD_version < 1000011
     _malloc_options = "J";
-#else
+#elif __FreeBSD_version < 500014
     malloc_options = "J";
 #endif
 

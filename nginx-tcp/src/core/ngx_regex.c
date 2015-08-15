@@ -80,17 +80,6 @@ ngx_regex_init(void)
 static ngx_inline void
 ngx_regex_malloc_init(ngx_pool_t *pool)
 {
-#if (NGX_THREADS)
-    ngx_core_tls_t  *tls;
-
-    if (ngx_threaded) {
-        tls = ngx_thread_get_tls(ngx_core_tls_key);
-        tls->pool = pool;
-        return;
-    }
-
-#endif
-
     ngx_pcre_pool = pool;
 }
 
@@ -98,17 +87,6 @@ ngx_regex_malloc_init(ngx_pool_t *pool)
 static ngx_inline void
 ngx_regex_malloc_done(void)
 {
-#if (NGX_THREADS)
-    ngx_core_tls_t  *tls;
-
-    if (ngx_threaded) {
-        tls = ngx_thread_get_tls(ngx_core_tls_key);
-        tls->pool = NULL;
-        return;
-    }
-
-#endif
-
     ngx_pcre_pool = NULL;
 }
 
@@ -149,17 +127,17 @@ ngx_regex_compile(ngx_regex_compile_t *rc)
 
     rc->regex = ngx_pcalloc(rc->pool, sizeof(ngx_regex_t));
     if (rc->regex == NULL) {
-        return NGX_ERROR;
+        goto nomem;
     }
 
-    rc->regex->pcre = re;
+    rc->regex->code = re;
 
     /* do not study at runtime */
 
     if (ngx_pcre_studies != NULL) {
         elt = ngx_list_push(ngx_pcre_studies);
         if (elt == NULL) {
-            return NGX_ERROR;
+            goto nomem;
         }
 
         elt->regex = rc->regex;
@@ -204,7 +182,15 @@ failed:
 
     rc->err.len = ngx_snprintf(rc->err.data, rc->err.len, p, &rc->pattern, n)
                   - rc->err.data;
-    return NGX_OK;
+    return NGX_ERROR;
+
+nomem:
+
+    rc->err.len = ngx_snprintf(rc->err.data, rc->err.len,
+                               "regex \"%V\" compilation failed: no memory",
+                               &rc->pattern)
+                  - rc->err.data;
+    return NGX_ERROR;
 }
 
 
@@ -245,22 +231,7 @@ static void * ngx_libc_cdecl
 ngx_regex_malloc(size_t size)
 {
     ngx_pool_t      *pool;
-#if (NGX_THREADS)
-    ngx_core_tls_t  *tls;
-
-    if (ngx_threaded) {
-        tls = ngx_thread_get_tls(ngx_core_tls_key);
-        pool = tls->pool;
-
-    } else {
-        pool = ngx_pcre_pool;
-    }
-
-#else
-
     pool = ngx_pcre_pool;
-
-#endif
 
     if (pool) {
         return ngx_palloc(pool, size);
@@ -367,7 +338,7 @@ ngx_regex_module_init(ngx_cycle_t *cycle)
             i = 0;
         }
 
-        elts[i].regex->extra = pcre_study(elts[i].regex->pcre, opt, &errstr);
+        elts[i].regex->extra = pcre_study(elts[i].regex->code, opt, &errstr);
 
         if (errstr != NULL) {
             ngx_log_error(NGX_LOG_ALERT, cycle->log, 0,
@@ -380,7 +351,7 @@ ngx_regex_module_init(ngx_cycle_t *cycle)
             int jit, n;
 
             jit = 0;
-            n = pcre_fullinfo(elts[i].regex->pcre, elts[i].regex->extra,
+            n = pcre_fullinfo(elts[i].regex->code, elts[i].regex->extra,
                               PCRE_INFO_JIT, &jit);
 
             if (n != 0 || jit != 1) {

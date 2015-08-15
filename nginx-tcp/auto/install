@@ -8,7 +8,7 @@ if [ $USE_PERL = YES ]; then
     cat << END                                                >> $NGX_MAKEFILE
 
 install_perl_modules:
-	cd $NGX_OBJS/src/http/modules/perl && make install
+	cd $NGX_OBJS/src/http/modules/perl && \$(MAKE) install
 END
 
     NGX_INSTALL_PERL_MODULES=install_perl_modules
@@ -18,10 +18,6 @@ fi
 
 case ".$NGX_SBIN_PATH" in
     ./*)
-    ;;
-
-    .)
-        NGX_SBIN_PATH=$NGX_PREFIX/sbin/nginx
     ;;
 
     *)
@@ -110,9 +106,36 @@ install:	$NGX_OBJS${ngx_dirsep}nginx${ngx_binext} \
 	test -d '\$(DESTDIR)$NGX_CONF_PREFIX' \
 		|| mkdir -p '\$(DESTDIR)$NGX_CONF_PREFIX'
 
+	cp conf/koi-win '\$(DESTDIR)$NGX_CONF_PREFIX'
+	cp conf/koi-utf '\$(DESTDIR)$NGX_CONF_PREFIX'
+	cp conf/win-utf '\$(DESTDIR)$NGX_CONF_PREFIX'
+
+	test -f '\$(DESTDIR)$NGX_CONF_PREFIX/mime.types' \
+		|| cp conf/mime.types '\$(DESTDIR)$NGX_CONF_PREFIX'
+	cp conf/mime.types '\$(DESTDIR)$NGX_CONF_PREFIX/mime.types.default'
+
+	test -f '\$(DESTDIR)$NGX_CONF_PREFIX/fastcgi_params' \
+		|| cp conf/fastcgi_params '\$(DESTDIR)$NGX_CONF_PREFIX'
+	cp conf/fastcgi_params \
+		'\$(DESTDIR)$NGX_CONF_PREFIX/fastcgi_params.default'
+
+	test -f '\$(DESTDIR)$NGX_CONF_PREFIX/fastcgi.conf' \
+		|| cp conf/fastcgi.conf '\$(DESTDIR)$NGX_CONF_PREFIX'
+	cp conf/fastcgi.conf '\$(DESTDIR)$NGX_CONF_PREFIX/fastcgi.conf.default'
+
+	test -f '\$(DESTDIR)$NGX_CONF_PREFIX/uwsgi_params' \
+		|| cp conf/uwsgi_params '\$(DESTDIR)$NGX_CONF_PREFIX'
+	cp conf/uwsgi_params \
+		'\$(DESTDIR)$NGX_CONF_PREFIX/uwsgi_params.default'
+
+	test -f '\$(DESTDIR)$NGX_CONF_PREFIX/scgi_params' \
+		|| cp conf/scgi_params '\$(DESTDIR)$NGX_CONF_PREFIX'
+	cp conf/scgi_params \
+		'\$(DESTDIR)$NGX_CONF_PREFIX/scgi_params.default'
 
 	test -f '\$(DESTDIR)$NGX_CONF_PATH' \
 		|| cp conf/nginx.conf '\$(DESTDIR)$NGX_CONF_PATH'
+	cp conf/nginx.conf '\$(DESTDIR)$NGX_CONF_PREFIX/nginx.conf.default'
 
 	test -d '\$(DESTDIR)`dirname "$NGX_PID_PATH"`' \
 		|| mkdir -p '\$(DESTDIR)`dirname "$NGX_PID_PATH"`'
@@ -120,6 +143,8 @@ install:	$NGX_OBJS${ngx_dirsep}nginx${ngx_binext} \
 	test -d '\$(DESTDIR)`dirname "$NGX_HTTP_LOG_PATH"`' || \
 		mkdir -p '\$(DESTDIR)`dirname "$NGX_HTTP_LOG_PATH"`'
 
+	test -d '\$(DESTDIR)$NGX_PREFIX/html' \
+		|| cp -R $NGX_HTML '\$(DESTDIR)$NGX_PREFIX'
 END
 
 

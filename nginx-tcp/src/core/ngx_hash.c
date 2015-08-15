@@ -282,7 +282,7 @@ ngx_hash_init(ngx_hash_init_t *hinit, ngx_hash_key_t *names, ngx_uint_t nelts)
         start = hinit->max_size - 1000;
     }
 
-    for (size = start; size < hinit->max_size; size++) {
+    for (size = start; size <= hinit->max_size; size++) {
 
         ngx_memzero(test, size * sizeof(u_short));
 
@@ -312,15 +312,14 @@ ngx_hash_init(ngx_hash_init_t *hinit, ngx_hash_key_t *names, ngx_uint_t nelts)
         continue;
     }
 
-    ngx_log_error(NGX_LOG_EMERG, hinit->pool->log, 0,
-                  "could not build the %s, you should increase "
-                  "either %s_max_size: %i or %s_bucket_size: %i",
+    size = hinit->max_size;
+
+    ngx_log_error(NGX_LOG_WARN, hinit->pool->log, 0,
+                  "could not build optimal %s, you should increase "
+                  "either %s_max_size: %i or %s_bucket_size: %i; "
+                  "ignoring %s_bucket_size",
                   hinit->name, hinit->name, hinit->max_size,
-                  hinit->name, hinit->bucket_size);
-
-    ngx_free(test);
-
-    return NGX_ERROR;
+                  hinit->name, hinit->bucket_size, hinit->name);
 
 found:
 
@@ -924,17 +923,6 @@ wildcard:
     }
 
 
-    hk = ngx_array_push(hwc);
-    if (hk == NULL) {
-        return NGX_ERROR;
-    }
-
-    hk->key.len = last - 1;
-    hk->key.data = p;
-    hk->key_hash = 0;
-    hk->value = value;
-
-
     /* check conflicts in wildcard hash */
 
     name = keys->elts;
@@ -971,6 +959,19 @@ wildcard:
     }
 
     ngx_memcpy(name->data, key->data + skip, name->len);
+
+
+    /* add to wildcard hash */
+
+    hk = ngx_array_push(hwc);
+    if (hk == NULL) {
+        return NGX_ERROR;
+    }
+
+    hk->key.len = last - 1;
+    hk->key.data = p;
+    hk->key_hash = 0;
+    hk->value = value;
 
     return NGX_OK;
 }

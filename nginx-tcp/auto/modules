@@ -42,17 +42,11 @@ fi
 
 if [ $NGX_TEST_BUILD_EPOLL = YES ]; then
     have=NGX_HAVE_EPOLL . auto/have
+    have=NGX_HAVE_EPOLLRDHUP . auto/have
     have=NGX_HAVE_EVENTFD . auto/have
     have=NGX_TEST_BUILD_EPOLL . auto/have
     EVENT_MODULES="$EVENT_MODULES $EPOLL_MODULE"
     CORE_SRCS="$CORE_SRCS $EPOLL_SRCS"
-fi
-
-if [ $NGX_TEST_BUILD_RTSIG = YES ]; then
-    have=NGX_HAVE_RTSIG . auto/have
-    have=NGX_TEST_BUILD_RTSIG . auto/have
-    EVENT_MODULES="$EVENT_MODULES $RTSIG_MODULE"
-    CORE_SRCS="$CORE_SRCS $RTSIG_SRCS"
 fi
 
 if [ $NGX_TEST_BUILD_SOLARIS_SENDFILEV = YES ]; then
@@ -100,6 +94,7 @@ fi
 #     ngx_http_write_filter
 #     ngx_http_header_filter
 #     ngx_http_chunked_filter
+#     ngx_http_spdy_filter
 #     ngx_http_range_header_filter
 #     ngx_http_gzip_filter
 #     ngx_http_postpone_filter
@@ -109,6 +104,7 @@ fi
 #         ngx_http_image_filter
 #         ngx_http_sub_filter
 #         ngx_http_addition_filter
+#         ngx_http_gunzip_filter
 #         ngx_http_userid_filter
 #         ngx_http_headers_filter
 #     ngx_http_copy_filter
@@ -117,8 +113,13 @@ fi
 
 HTTP_FILTER_MODULES="$HTTP_WRITE_FILTER_MODULE \
                      $HTTP_HEADER_FILTER_MODULE \
-                     $HTTP_CHUNKED_FILTER_MODULE \
-                     $HTTP_RANGE_HEADER_FILTER_MODULE"
+                     $HTTP_CHUNKED_FILTER_MODULE"
+
+if [ $HTTP_SPDY = YES ]; then
+    HTTP_FILTER_MODULES="$HTTP_FILTER_MODULES $HTTP_SPDY_FILTER_MODULE"
+fi
+
+HTTP_FILTER_MODULES="$HTTP_FILTER_MODULES $HTTP_RANGE_HEADER_FILTER_MODULE"
 
 if [ $HTTP_GZIP = YES ]; then
     have=NGX_HTTP_GZIP . auto/have
@@ -166,9 +167,25 @@ if [ $HTTP_ADDITION = YES ]; then
     HTTP_SRCS="$HTTP_SRCS $HTTP_ADDITION_SRCS"
 fi
 
+if [ $HTTP_GUNZIP = YES ]; then
+    have=NGX_HTTP_GZIP . auto/have
+    USE_ZLIB=YES
+    HTTP_FILTER_MODULES="$HTTP_FILTER_MODULES $HTTP_GUNZIP_FILTER_MODULE"
+    HTTP_SRCS="$HTTP_SRCS $HTTP_GUNZIP_SRCS"
+fi
+
 if [ $HTTP_USERID = YES ]; then
     HTTP_FILTER_MODULES="$HTTP_FILTER_MODULES $HTTP_USERID_FILTER_MODULE"
     HTTP_SRCS="$HTTP_SRCS $HTTP_USERID_SRCS"
+fi
+
+
+if [ $HTTP_SPDY = YES ]; then
+    have=NGX_HTTP_SPDY . auto/have
+    USE_ZLIB=YES
+    HTTP_MODULES="$HTTP_MODULES $HTTP_SPDY_MODULE"
+    HTTP_DEPS="$HTTP_DEPS $HTTP_SPDY_DEPS"
+    HTTP_SRCS="$HTTP_SRCS $HTTP_SPDY_SRCS"
 fi
 
 HTTP_MODULES="$HTTP_MODULES $HTTP_STATIC_MODULE"
@@ -197,6 +214,11 @@ if [ $HTTP_RANDOM_INDEX = YES ]; then
     HTTP_SRCS="$HTTP_SRCS $HTTP_RANDOM_INDEX_SRCS"
 fi
 
+if [ $HTTP_AUTH_REQUEST = YES ]; then
+    HTTP_MODULES="$HTTP_MODULES $HTTP_AUTH_REQUEST_MODULE"
+    HTTP_SRCS="$HTTP_SRCS $HTTP_AUTH_REQUEST_SRCS"
+fi
+
 if [ $HTTP_AUTH_BASIC = YES ]; then
     USE_MD5=YES
     USE_SHA1=YES
@@ -223,6 +245,7 @@ fi
 
 if [ $HTTP_REALIP = YES ]; then
     have=NGX_HTTP_REALIP . auto/have
+    have=NGX_HTTP_X_FORWARDED_FOR . auto/have
     HTTP_MODULES="$HTTP_MODULES $HTTP_REALIP_MODULE"
     HTTP_SRCS="$HTTP_SRCS $HTTP_REALIP_SRCS"
 fi
@@ -233,12 +256,13 @@ if [ $HTTP_STATUS = YES ]; then
 fi
 
 if [ $HTTP_GEO = YES ]; then
-    have=NGX_HTTP_GEO . auto/have
+    have=NGX_HTTP_X_FORWARDED_FOR . auto/have
     HTTP_MODULES="$HTTP_MODULES $HTTP_GEO_MODULE"
     HTTP_SRCS="$HTTP_SRCS $HTTP_GEO_SRCS"
 fi
 
 if [ $HTTP_GEOIP = YES ]; then
+    have=NGX_HTTP_X_FORWARDED_FOR . auto/have
     HTTP_MODULES="$HTTP_MODULES $HTTP_GEOIP_MODULE"
     HTTP_SRCS="$HTTP_SRCS $HTTP_GEOIP_SRCS"
 fi
@@ -273,7 +297,7 @@ if [ $HTTP_SSL = YES ]; then
 fi
 
 if [ $HTTP_PROXY = YES ]; then
-    have=NGX_HTTP_PROXY . auto/have
+    have=NGX_HTTP_X_FORWARDED_FOR . auto/have
     #USE_MD5=YES
     HTTP_MODULES="$HTTP_MODULES $HTTP_PROXY_MODULE"
     HTTP_DEPS="$HTTP_DEPS $HTTP_PROXY_DEPS"
@@ -340,14 +364,30 @@ if [ $HTTP_MP4 = YES ]; then
     HTTP_SRCS="$HTTP_SRCS $HTTP_MP4_SRCS"
 fi
 
+if [ $HTTP_UPSTREAM_HASH = YES ]; then
+    HTTP_MODULES="$HTTP_MODULES $HTTP_UPSTREAM_HASH_MODULE"
+    HTTP_SRCS="$HTTP_SRCS $HTTP_UPSTREAM_HASH_SRCS"
+fi
+
 if [ $HTTP_UPSTREAM_IP_HASH = YES ]; then
     HTTP_MODULES="$HTTP_MODULES $HTTP_UPSTREAM_IP_HASH_MODULE"
     HTTP_SRCS="$HTTP_SRCS $HTTP_UPSTREAM_IP_HASH_SRCS"
 fi
 
+if [ $HTTP_UPSTREAM_LEAST_CONN = YES ]; then
+    HTTP_MODULES="$HTTP_MODULES $HTTP_UPSTREAM_LEAST_CONN_MODULE"
+    HTTP_SRCS="$HTTP_SRCS $HTTP_UPSTREAM_LEAST_CONN_SRCS"
+fi
+
 if [ $HTTP_UPSTREAM_KEEPALIVE = YES ]; then
     HTTP_MODULES="$HTTP_MODULES $HTTP_UPSTREAM_KEEPALIVE_MODULE"
     HTTP_SRCS="$HTTP_SRCS $HTTP_UPSTREAM_KEEPALIVE_SRCS"
+fi
+
+if [ $HTTP_UPSTREAM_ZONE = YES ]; then
+    have=NGX_HTTP_UPSTREAM_ZONE . auto/have
+    HTTP_MODULES="$HTTP_MODULES $HTTP_UPSTREAM_ZONE_MODULE"
+    HTTP_SRCS="$HTTP_SRCS $HTTP_UPSTREAM_ZONE_SRCS"
 fi
 
 if [ $HTTP_STUB_STATUS = YES ]; then
@@ -369,13 +409,13 @@ if test -n "$NGX_ADDONS"; then
     do
         echo "adding module in $ngx_addon_dir"
 
-        if test -f $ngx_addon_dir/$NGX_MOD_CFG; then
-            . $ngx_addon_dir/$NGX_MOD_CFG
+        if test -f $ngx_addon_dir/config; then
+            . $ngx_addon_dir/config
 
             echo " + $ngx_addon_name was configured"
 
         else
-            echo "$0: error: no $ngx_addon_dir/$NGX_MOD_CFG was found"
+            echo "$0: error: no $ngx_addon_dir/config was found"
             exit 1
         fi
     done
@@ -388,7 +428,19 @@ if [ $MAIL_SSL = YES ]; then
 fi
 
 
+if [ $STREAM_SSL = YES ]; then
+    have=NGX_STREAM_SSL . auto/have
+    USE_OPENSSL=YES
+fi
+
+
 modules="$CORE_MODULES $EVENT_MODULES"
+
+
+# thread pool module should be initialized after events
+if [ $USE_THREADS = YES ]; then
+    modules="$modules $THREAD_POOL_MODULE"
+fi
 
 
 if [ $USE_OPENSSL = YES ]; then
@@ -447,6 +499,48 @@ if [ $MAIL = YES ]; then
 
     modules="$modules $MAIL_PROXY_MODULE"
     MAIL_SRCS="$MAIL_SRCS $MAIL_PROXY_SRCS"
+
+    NGX_ADDON_DEPS="$NGX_ADDON_DEPS \$(MAIL_DEPS)"
+fi
+
+
+if [ $STREAM = YES ]; then
+    have=NGX_STREAM . auto/have
+    modules="$modules $STREAM_MODULES"
+
+    if [ $STREAM_SSL = YES ]; then
+        modules="$modules $STREAM_SSL_MODULE"
+        STREAM_DEPS="$STREAM_DEPS $STREAM_SSL_DEPS"
+        STREAM_SRCS="$STREAM_SRCS $STREAM_SSL_SRCS"
+    fi
+
+    if [ $STREAM_LIMIT_CONN = YES ]; then
+        modules="$modules $STREAM_LIMIT_CONN_MODULE"
+        STREAM_SRCS="$STREAM_SRCS $STREAM_LIMIT_CONN_SRCS"
+    fi
+
+    if [ $STREAM_ACCESS = YES ]; then
+        modules="$modules $STREAM_ACCESS_MODULE"
+        STREAM_SRCS="$STREAM_SRCS $STREAM_ACCESS_SRCS"
+    fi
+
+    if [ $STREAM_UPSTREAM_HASH = YES ]; then
+        modules="$modules $STREAM_UPSTREAM_HASH_MODULE"
+        STREAM_SRCS="$STREAM_SRCS $STREAM_UPSTREAM_HASH_SRCS"
+    fi
+
+    if [ $STREAM_UPSTREAM_LEAST_CONN = YES ]; then
+        modules="$modules $STREAM_UPSTREAM_LEAST_CONN_MODULE"
+        STREAM_SRCS="$STREAM_SRCS $STREAM_UPSTREAM_LEAST_CONN_SRCS"
+    fi
+
+    if [ $STREAM_UPSTREAM_ZONE = YES ]; then
+        have=NGX_STREAM_UPSTREAM_ZONE . auto/have
+        modules="$modules $STREAM_UPSTREAM_ZONE_MODULE"
+        STREAM_SRCS="$STREAM_SRCS $STREAM_UPSTREAM_ZONE_SRCS"
+    fi
+
+    NGX_ADDON_DEPS="$NGX_ADDON_DEPS \$(STREAM_DEPS)"
 fi
 
 
@@ -458,6 +552,7 @@ fi
 
 if [ $NGX_CPP_TEST = YES ]; then
     NGX_MISC_SRCS="$NGX_MISC_SRCS $NGX_CPP_TEST_SRCS"
+    CORE_LIBS="$CORE_LIBS -lstdc++"
 fi
 
 
