@@ -1,0 +1,6 @@
+
+NGX_ADDON_SRCS="$NGX_ADDON_SRCS $ngx_addon_dir/helloworld.cpp $ngx_addon_dir/IniFile.cpp"
+
+#CFLAGS="$CFLAGS -I xxx "
+#CORE_LIBS="$CORE_LIBS  -l xxx"
+

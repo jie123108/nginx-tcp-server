@@ -51,7 +51,6 @@ typedef struct {
 }test_sleep_dt;
 
 //返回错误吗：
-
 #define ERRNO_OK	0					//成功	
 #define ERRNO_SYSTEM	1				//系统错误	所有接口
 #define ERRNO_REQ_INVALID	2			//请求参数错误。	所有接口

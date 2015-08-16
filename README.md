@@ -1,8 +1,10 @@
 nginx tcp server
 ===================================  
-	基于nginx的高性能的TCP服务器模块。采用协程(makecontext)实现纯异步，异步支持mysql,redis等常用的基于TCP的驱动。
+	基于nginx的高性能的TCP服务器模块。采用协程(makecontext)实现纯异步，
+	异步支持mysql,redis等常用的基于TCP的驱动。
 	本模块基于nginx的stream开发。只支持1.9.x以上的版本。
 
+* [ChangeLogs](./ChangeLogs.md "ChangeLogs")
 
 基于协程的异步实现：
 -----------------------------------
@@ -55,28 +57,30 @@ stream {
 -----------------------------------
     # 进入程序目录
 	cd path/to/nginx-tcp/
+	# 安装目录定义
+	export TCP_SERVER=/usr/local/nginx-tcp-server
 	# 编译程序，及Demo服务程序。
-	./configure --prefix=/usr/local/nginx-tcp-server \
+	./configure --prefix=$TCP_SERVER \
     --with-debug --without-pcre --without-http \
     --with-stream  --add-module=src/tcp_svr \
     --add-module=src/tcp_svr/demo
 	make -j 4
 	make install
 	#拷贝测试配置。
-	cp -f src/tcp_svr/demo/conf/nginx.conf /usr/local/nginx-tcp-server/conf/
-	cp -f src/tcp_svr/demo/conf/testcfg.ini /usr/local/nginx-tcp-server/conf/
+	cp -f src/tcp_svr/demo/conf/nginx.conf $TCP_SERVER/conf/
+	cp -f src/tcp_svr/demo/conf/testcfg.ini $TCP_SERVER/conf/
 	#启动程序
-	/usr/local/nginx-tcp-server/sbin/nginx
+	$TCP_SERVER/sbin/nginx
 	#编译测试客户端
 	cd src/tcp_svr/demo/client/
 	make
 	#查看测试帮助：
 	./testcli -?
-	./testcli -h [host] -t [threads] -r [request count] -f [function]  -?
-	-f function: ######## functions ##########
-          1:ADD 2:SUB 3:QUERY 4:SLEEP
+	>./testcli -h [host] -t [threads] -r [request count] -f [function]  -?
+	>-f function: ######## functions ##########
+    >      1:ADD 2:SUB 3:QUERY 4:SLEEP
 
-	#测试之前请自动安装启动mysql,并确保配置正确。
+	#测试之前请自行安装并启动mysql,并确保配置(testcfg.ini)正确。
 	#测试累加
 	./testcli -h 127.0.0.1 -t 4 -r 1000 -f 1
 	#测试累减
@@ -85,12 +89,12 @@ stream {
 	############# 测试同步与异步的差别 #############
 	#测试同步的方法：
 	```
-	修改/usr/local/nginx-tcp-server/conf/nginx.conf配置：
+	修改$TCP_SERVER/conf/nginx.conf配置：
 	worker_processes  1; #确保只有一个worker.
 	use_async off;		 #关闭异步
 	#重启nginx
-	/usr/local/nginx-tcp-server/sbin/nginx -s stop
-	/usr/local/nginx-tcp-server/sbin/nginx
+	$TCP_SERVER/sbin/nginx -s stop
+	$TCP_SERVER/sbin/nginx
 	#运行测试程序(-h 指定Host, -t 指定线程数，-r指定请求数，-f指定测试功能)
 	./testcli -h 127.0.0.1 -t 4 -r 10 -f 4 
 	#测试输出结果大概如下：
@@ -102,12 +106,12 @@ stream {
 	#这说明在同步的情况下，进程被后端阻塞时，没有办法处理其它请求。
 
 	#测试异步的方法：
-	修改/usr/local/nginx-tcp-server/conf/nginx.conf配置：
+	修改$TCP_SERVER/conf/nginx.conf配置：
 	worker_processes  1; #确保只有一个worker.
 	use_async on;		 #启用异步
 	#重启nginx
-	/usr/local/nginx-tcp-server/sbin/nginx -s stop
-	/usr/local/nginx-tcp-server/sbin/nginx
+	$TCP_SERVER/sbin/nginx -s stop
+	$TCP_SERVER/sbin/nginx
 	./testcli -h 127.0.0.1 -t 4 -r 10 -f 4 
 	#测试输出结果大概如下：
 	requests,error,threads,totaltimes,  QPS
@@ -166,3 +170,21 @@ extern int test_proc(ngx_tcp_req_t* req, ngx_tcp_rsp_t* rsp)
 --------------------------------------
 	可以用于测试tcp_svr/demo服务的客户端工具。
 
+基于nginx-tcp-server的Hello World程序开发
+--------------------------------------
+[Hello World示例开发](./HelloWorld.md "Hello World示例开发")
+
+Authors
+=======
+
+* liuxiaojie (刘小杰)  <jie123108@163.com>
+
+
+Copyright & License
+===================
+
+This module is licenced under the BSD license.
+
+Copyright (C) 2015, by liuxiaojie (刘小杰)  <jie123108@163.com>
+
+All rights reserved.

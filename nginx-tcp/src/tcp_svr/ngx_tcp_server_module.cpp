@@ -535,7 +535,7 @@ void ngx_tcp_server_write_handler(ngx_event_t *wev)
 	c = (ngx_connection_t*)wev->data;
 	ngx_tcp_data_t* data = (ngx_tcp_data_t*)c->data;
 
-	//NLOG_DEBUG("data {0x%08x} fd:%d ready:%d active:%d", (int)data, c->fd, wev->ready,wev->active);
+	//NLOG_DEBUG("data {%p} fd:%d ready:%d active:%d", data, (int)c->fd, wev->ready,wev->active);
 	if(data->status!=NS_SEND){
 		if(data->status == NS_DONE) return;
 		NLOG_ERROR("data {0x%08x} invalid status [%d] fd:%d ", 

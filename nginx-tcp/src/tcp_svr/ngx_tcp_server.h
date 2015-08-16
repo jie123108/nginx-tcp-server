@@ -35,12 +35,17 @@ typedef struct ngx_tcp_server_srv_conf_s{
 	IContext* appctx;
 }ngx_tcp_server_srv_conf_t;
 
-
+/**
+ * 上下文接口
+ */
 class IContext {
 public:
 	virtual ~IContext(){};
+	// 配置文件初始化。
 	virtual int cfg_init(const char* config, ngx_tcp_server_srv_conf_t* tcp_svr_cfg)=0;
+	// 上下文初始化，一般是进行数据库，网络链接相关的初始化。
 	virtual int ctx_init(ngx_cycle_t* cycle)=0;
+	// 资源销毁。
 	virtual void destroy(ngx_cycle_t* cycle)=0;
 };
 
